@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PROBET | V26 MATCH-LOCK</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        :root { 
+            --bg: #0a0a0a; --card: #151515; --white: #ffffff; 
+            --green: #00e676; --gold: #ffd700; --silver: #bdc3c7; --red: #ff5252;
+        }
+        body { background: var(--bg); color: var(--white); font-family: sans-serif; margin: 0; padding: 15px; display: flex; justify-content: center; }
+        .container { width: 100%; max-width: 420px; }
+        .glass-card { background: var(--card); padding: 20px; border-radius: 15px; border-bottom: 5px solid #000; margin-bottom: 20px; text-align: center; }
+        
+        .btn-3d { width: 100%; padding: 16px; margin: 8px 0; border-radius: 12px; border: none; font-weight: 900; cursor: pointer; transition: 0.1s; text-transform: uppercase; }
+        .white { background: #fff; color: #000; box-shadow: 0 6px 0 #999; }
+        .dark { background: #1a1a1a; color: #fff; box-shadow: 0 6px 0 #000; border: 1px solid #333; }
+        .green-btn { background: var(--green); color: #000; box-shadow: 0 6px 0 #008f4c; }
+        .red-btn { background: var(--red); color: #fff; box-shadow: 0 6px 0 #a00; }
+        .btn-3d:active { transform: translateY(3px); box-shadow: 0 2px 0 #000; }
+        .btn-3d:disabled { background: #333 !important; color: #666 !important; box-shadow: none !important; cursor: not-allowed; transform: none !important; }
+        
+        .screen { display: none; }
+        .active { display: block; }
+        input, select { width: 100%; padding: 15px; margin: 8px 0; background: #111; border: 1px solid #333; color: #fff; border-radius: 10px; box-sizing: border-box; }
+        
+        .nav-bar { display: flex; gap: 8px; margin-bottom: 20px; }
+        .nav-btn { flex: 1; padding: 12px; background: #1a1a1a; border: none; color: white; border-radius: 10px; font-weight: bold; cursor: pointer; }
+        .active-nav { background: var(--green); color: black; }
+        
+        .match-item { background: #151515; padding: 18px; border-radius: 12px; margin-bottom: 12px; border-left: 5px solid var(--green); cursor: pointer; border-bottom: 4px solid #000; text-align: left; }
+        
+        .mini-slip { padding: 20px; border-radius: 15px; margin-bottom: 15px; color: #000; border: 2px solid #fff; box-shadow: 0 8px 15px rgba(0,0,0,0.5); text-align: left; }
+        .slip-pending { background: linear-gradient(135deg, var(--silver) 0%, var(--gold) 100%); }
+        .slip-win { background: rgba(0, 230, 118, 0.4); color: var(--white); border-color: var(--green); }
+        .slip-loss { background: rgba(255, 82, 82, 0.4); color: var(--white); border-color: var(--red); }
+
+        .modal-3d { display:none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111; width: 85%; max-width: 340px; padding: 25px; border-radius: 25px; border: 1px solid #333; z-index: 200; text-align: center; border-bottom: 8px solid var(--gold); }
+        #overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); z-index:150; backdrop-filter: blur(8px); }
+        .wallet-display { background: #1a1a1a; padding: 15px; border-radius: 12px; color: var(--green); font-weight: 900; margin-bottom: 15px; text-align:center; cursor: pointer; border: 1px solid #333; }
+        
+        .qr-box { background: white; padding: 10px; border-radius: 10px; width: 160px; margin: 15px auto; display: flex; align-items: center; justify-content: center; }
+
+        .odds-controller { background: #222; padding: 15px; border-radius: 12px; margin-top: 15px; border: 1px dashed var(--gold); }
+        input[type=range] { -webkit-appearance: none; width: 100%; background: transparent; }
+        input[type=range]::-webkit-slider-runnable-track { width: 100%; height: 8px; cursor: pointer; background: #444; border-radius: 5px; }
+        input[type=range]::-webkit-slider-thumb { height: 24px; width: 24px; border-radius: 50%; background: var(--gold); cursor: pointer; -webkit-appearance: none; margin-top: -8px; box-shadow: 0 0 10px var(--gold); }
+        
+        #peer-status { font-size: 10px; color: var(--gold); margin-top: 5px; opacity: 0.7; }
+        .lock-indicator { color: var(--red); font-weight: bold; margin-bottom: 10px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div id="choice-screen" class="screen active">
+        <h1 style="text-align:center; margin-top:50px; letter-spacing: 5px;">PROBET</h1>
+        <button class="btn-3d white" onclick="navigateTo('login-screen')">Login</button>
+        <button class="btn-3d dark" onclick="navigateTo('login-screen')">Register</button>
+    </div>
+
+    <div id="login-screen" class="screen">
+        <h2 style="text-align: center;">SECURE ACCESS</h2>
+        <input type="text" id="id-input" placeholder="Phone Number">
+        <input type="password" id="pass-input" placeholder="Passcode">
+        <button class="btn-3d white" onclick="handleLogin()">Login to Account</button>
+    </div>
+
+    <div id="app-screen" class="screen">
+        <div class="wallet-display" onclick="openWallet()">BALANCE: ₹<span id="bal-txt">0</span></div>
+        <div class="nav-bar">
+            <button id="btn-m" class="nav-btn active-nav" onclick="setTab('matches')">MATCHES</button>
+            <button id="btn-s" class="nav-btn" onclick="setTab('slips')">SLIPS</button>
+            <button id="btn-a" class="nav-btn" style="display:none;" onclick="setTab('admin')">ADM</button>
+        </div>
+        
+        <div id="tab-matches"><div id="match-list"></div></div>
+        <div id="tab-slips" style="display:none;"><div id="slip-list"></div></div>
+        
+        <div id="tab-admin" style="display:none;">
+            <div class="glass-card">
+                <h4>MATCH MANAGER</h4>
+                <input type="text" id="adm-m-name" placeholder="Team A vs Team B">
+                <button class="btn-3d white" onclick="addMatch()">Add Match</button>
+            </div>
+            <div class="glass-card">
+                <h4>SETTLE RESULT</h4>
+                <select id="settle-match-select"></select>
+                <input type="text" id="winner-name" placeholder="Winning Team">
+                <button class="btn-3d green-btn" onclick="settleMatch()">Settle & Remove</button>
+            </div>
+            <div class="glass-card">
+                <h4>USER CONTROL</h4>
+                <input type="text" id="adm-u-id" placeholder="User ID">
+                <input type="number" id="adm-u-amt" placeholder="Amount">
+                <button class="btn-3d white" onclick="fundUser()">Approve Fund</button>
+                <button class="btn-3d dark" onclick="adminMonitorUser()">Monitor Bets</button>
+                <button class="btn-3d red-btn" onclick="resetTargetUserSlips()">Reset Slips</button>
+                <div id="monitor-output" style="margin-top:10px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="dash-screen" class="screen">
+        <button onclick="navigateTo('app-screen')" style="color:var(--green); background:none; border:none; margin-bottom:10px; cursor:pointer;">← BACK</button>
+        <div class="glass-card">
+            <div id="bet-lock-msg" class="lock-indicator">⚠️ BETTING SUSPENDED</div>
+            <h2 id="dash-title">MATCH</h2>
+        </div>
+        
+        <button id="bet-btn-A" class="btn-3d white" onclick="prepBet('A')"><span id="name-A"></span><br><span id="odds-A">1.90</span></button>
+        <button id="bet-btn-B" class="btn-3d dark" onclick="prepBet('B')"><span id="name-B"></span><br><span id="odds-B">1.90</span></button>
+
+        <div id="live-odds-box" class="odds-controller" style="display:none;">
+            <p style="color:var(--gold); font-weight:bold; font-size:12px;">P2P ODDS BALANCER</p>
+            <input type="range" id="odds-slider" min="1.10" max="3.80" step="0.05" value="1.90" oninput="calculateInverseOdds(this.value)">
+            <div style="display:flex; justify-content:space-between; margin-top:10px; font-weight:bold;">
+                <span>Set Team A: <span id="slider-val">1.90</span></span>
+            </div>
+            <hr style="border: 0.5px solid #444; margin: 15px 0;">
+            <button id="lock-toggle-btn" class="btn-3d red-btn" onclick="toggleMatchLock()">LOCK BETS</button>
+            <div id="peer-status">System: Offline</div>
+        </div>
+    </div>
+</div>
+
+<div id="overlay" onclick="closeModals()"></div>
+
+<div id="modal-wallet" class="modal-3d">
+    <h3>WALLET</h3>
+    <button class="btn-3d white" onclick="closeModals(); openD();">Deposit</button>
+    <button class="btn-3d dark" onclick="closeModals(); openW();">Withdraw</button>
+</div>
+
+<div id="modal-deposit" class="modal-3d">
+    <h3>SCAN TO PAY</h3>
+    <div class="qr-box"><img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=upi://pay?pa=8340644890@fam&pn=PROBET" width="150" height="150"></div>
+    <input type="number" id="d-amt" placeholder="Amount Paid">
+    <input type="text" id="d-utr" placeholder="UTR/Transaction ID">
+    <button class="btn-3d green-btn" onclick="submitD()">Submit Payment</button>
+</div>
+
+<div id="modal-withdraw" class="modal-3d">
+    <h3>WITHDRAW</h3>
+    <select id="w-type" onchange="toggleWFields()"><option value="upi">UPI</option><option value="bank">Bank Account</option><option value="crypto">Crypto (USDT)</option></select>
+    <div id="f-upi"><input type="text" id="in-upi" placeholder="UPI ID"></div>
+    <div id="f-bank" style="display:none;"><input type="text" id="in-acc" placeholder="Account No"><input type="text" id="in-ifsc" placeholder="IFSC"></div>
+    <div id="f-crypto" style="display:none;"><input type="text" id="in-crypto" placeholder="USDT TRC20 Address"></div>
+    <input type="number" id="w-amt" placeholder="Amount">
+    <button class="btn-3d white" onclick="submitW()">Request Withdrawal</button>
+</div>
+
+<div id="modal-bet" class="modal-3d">
+    <h3 id="bet-team"></h3>
+    <input type="number" id="bet-stake" placeholder="Stake">
+    <button class="btn-3d white" onclick="placeBet()">Confirm Bet</button>
+</div>
+
+<div id="modal-msg" class="modal-3d">
+    <h3 id="msg-title" style="color:var(--gold)">REQUEST SENT</h3>
+    <p id="msg-txt"></p>
+    <button class="btn-3d white" onclick="closeModals()">OK</button>
+</div>
+
+<script>
+    let user = '', isAdmin = false;
+    let mList = JSON.parse(localStorage.getItem('match_list')) || ["India vs Australia", "CSK vs RCB"];
+    let activeM = '', selectedS = '';
+    let currentOddsA = 1.90, currentOddsB = 1.90;
+    
+    // --- P2P PEERJS LOGIC ---
+    let peer, connections = [];
+    const ADMIN_PEER_ID = 'probet-admin-broadcast-v26';
+
+    function initP2P() {
+        if(isAdmin) {
+            peer = new Peer(ADMIN_PEER_ID);
+            peer.on('open', () => { document.getElementById('peer-status').innerText = "Broadcasting Live..."; });
+            peer.on('connection', (conn) => {
+                connections.push(conn);
+                conn.on('open', () => { 
+                    conn.send({ match: activeM, oa: currentOddsA, ob: currentOddsB, lock: isMatchLocked(activeM) }); 
+                });
+            });
+        } else {
+            peer = new Peer(); 
+            peer.on('open', () => {
+                const conn = peer.connect(ADMIN_PEER_ID);
+                conn.on('data', (data) => { 
+                    if(data.match === activeM) {
+                        applyFinalOdds(data.oa, data.ob);
+                        applyLockUI(data.lock);
+                    }
+                });
+            });
+        }
+    }
+
+    // --- MATCH-SPECIFIC LOCK LOGIC ---
+    function isMatchLocked(mName) {
+        return localStorage.getItem('lock_' + mName) === 'true';
+    }
+
+    function toggleMatchLock() {
+        let currentStatus = isMatchLocked(activeM);
+        let newStatus = !currentStatus;
+        localStorage.setItem('lock_' + activeM, newStatus);
+        
+        updateAdminLockButton(newStatus);
+        applyLockUI(newStatus);
+        
+        // Broadcast specifically for this match
+        connections.forEach(conn => {
+            if(conn.open) conn.send({ match: activeM, oa: currentOddsA, ob: currentOddsB, lock: newStatus });
+        });
+    }
+
+    function updateAdminLockButton(status) {
+        const btn = document.getElementById('lock-toggle-btn');
+        if(status) {
+            btn.innerText = "UNLOCK BETS";
+            btn.className = "btn-3d green-btn";
+        } else {
+            btn.innerText = "LOCK BETS";
+            btn.className = "btn-3d red-btn";
+        }
+    }
+
+    function applyLockUI(status) {
+        const btnA = document.getElementById('bet-btn-A');
+        const btnB = document.getElementById('bet-btn-B');
+        const msg = document.getElementById('bet-lock-msg');
+        
+        if(status) {
+            btnA.disabled = true; btnB.disabled = true;
+            msg.style.display = 'block';
+        } else {
+            btnA.disabled = false; btnB.disabled = false;
+            msg.style.display = 'none';
+        }
+    }
+
+    // --- ODDS LOGIC ---
+    function calculateInverseOdds(valA) {
+        let oa = parseFloat(valA);
+        let probA = 1 / oa;
+        let probB = 1.08 - probA; 
+        let ob = (1 / probB).toFixed(2);
+        if (ob < 1.1) ob = 1.10;
+        if (ob > 10) ob = 10.00;
+        broadcastBalancedOdds(oa.toFixed(2), ob);
+    }
+
+    function broadcastBalancedOdds(oa, ob) {
+        currentOddsA = oa; currentOddsB = ob;
+        applyFinalOdds(oa, ob);
+        localStorage.setItem('liveOddsA_' + activeM, oa);
+        localStorage.setItem('liveOddsB_' + activeM, ob);
+        connections.forEach(conn => { if(conn.open) conn.send({ match: activeM, oa: oa, ob: ob, lock: isMatchLocked(activeM) }); });
+    }
+
+    function applyFinalOdds(oa, ob) {
+        document.getElementById('odds-A').innerText = oa;
+        document.getElementById('odds-B').innerText = ob;
+        document.getElementById('slider-val').innerText = oa;
+        document.getElementById('odds-slider').value = oa;
+        currentOddsA = oa; currentOddsB = ob;
+    }
+
+    // --- CORE NAVIGATION & AUTH ---
+    function handleLogin() {
+        const id = document.getElementById('id-input').value.trim();
+        const ps = document.getElementById('pass-input').value.trim();
+        if(!id || !ps) return alert("Enter credentials");
+        if(id === '8252955658' && ps === 'Aadi@2008') { user = id; isAdmin = true; document.getElementById('btn-a').style.display = 'block'; } 
+        else { user = id; isAdmin = false; }
+        initP2P(); navigateTo('app-screen');
+    }
+
+    function navigateTo(id) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(id === 'app-screen') { renderMatches(); updateBal(); populateSettleList(); }
+        if(id === 'dash-screen') { 
+            loadMatchState(); 
+            document.getElementById('live-odds-box').style.display = isAdmin ? 'block' : 'none';
+        }
+    }
+
+    function loadMatchState() {
+        let oa = localStorage.getItem('liveOddsA_' + activeM) || "1.90";
+        let ob = localStorage.getItem('liveOddsB_' + activeM) || "1.90";
+        applyFinalOdds(oa, ob);
+        
+        let lockState = isMatchLocked(activeM);
+        applyLockUI(lockState);
+        if(isAdmin) updateAdminLockButton(lockState);
+    }
+
+    function renderMatches() {
+        const c = document.getElementById('match-list'); c.innerHTML = "";
+        mList.forEach(m => {
+            const d = document.createElement('div'); d.className = "match-item";
+            d.innerHTML = `<b>${m}</b>`;
+            d.onclick = () => {
+                activeM = m; document.getElementById('dash-title').innerText = m;
+                const ts = m.split(' vs '); document.getElementById('name-A').innerText = ts[0];
+                document.getElementById('name-B').innerText = ts[1]; navigateTo('dash-screen');
+            };
+            c.appendChild(d);
+        });
+    }
+
+    function placeBet() {
+        if(isMatchLocked(activeM)) return alert("Betting is suspended for this match!");
+        const stake = parseFloat(document.getElementById('bet-stake').value);
+        let bal = parseFloat(localStorage.getItem('bal_'+user)) || 0;
+        if(!stake || stake > bal) return alert("Low Balance");
+        localStorage.setItem('bal_'+user, (bal - stake).toFixed(2));
+        let odds = (selectedS === document.getElementById('name-A').innerText) ? currentOddsA : currentOddsB;
+        const slip = { m: activeM, t: selectedS, s: stake, o: odds, w: (stake * odds).toFixed(2), time: new Date().toLocaleString(), status: 'pending' };
+        let h = JSON.parse(localStorage.getItem('slips_'+user)) || [];
+        h.unshift(slip); localStorage.setItem('slips_'+user, JSON.stringify(h));
+        closeModals(); updateBal();
+    }
+
+    // --- OTHER FEATURES ---
+    function updateBal() { document.getElementById('bal-txt').innerText = (parseFloat(localStorage.getItem('bal_'+user)) || 0).toFixed(2); }
+    function setTab(t) {
+        ['matches', 'slips', 'admin'].forEach(tab => document.getElementById('tab-'+tab).style.display = t === tab ? 'block' : 'none');
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active-nav'));
+        document.getElementById('btn-' + t.charAt(0)).classList.add('active-nav');
+        if(t === 'slips') renderSlips(user, 'slip-list');
+    }
+    function renderSlips(uid, containerId) {
+        const c = document.getElementById(containerId); if(!c) return;
+        const sls = JSON.parse(localStorage.getItem('slips_'+uid)) || [];
+        c.innerHTML = sls.length ? "" : "<p style='text-align:center; opacity:0.5;'>No history.</p>";
+        sls.forEach(s => {
+            const d = document.createElement('div');
+            let sc = 'slip-pending', l = 'POTENTIAL', a = s.w;
+            if(s.status === 'win') { sc = 'slip-win'; l = 'WINNINGS'; }
+            else if(s.status === 'loss') { sc = 'slip-loss'; l = 'LOSS'; a = s.s; }
+            d.className = "mini-slip " + sc;
+            d.innerHTML = `<div style="font-size:10px; opacity:0.6">${s.time}</div><b>${s.m}</b><br>PICK: ${s.t} @ ${s.o}<br><div style="display:flex; justify-content:space-between"><span>STAKE: ₹${s.s}</span><span style="font-weight:900">${l}: ₹${a}</span></div>`;
+            c.appendChild(d);
+        });
+    }
+    function openD() { document.getElementById('overlay').style.display = 'block'; document.getElementById('modal-deposit').style.display = 'block'; }
+    function openW() { document.getElementById('overlay').style.display = 'block'; document.getElementById('modal-withdraw').style.display = 'block'; }
+    function toggleWFields() {
+        const v = document.getElementById('w-type').value;
+        document.getElementById('f-upi').style.display = v === 'upi' ? 'block' : 'none';
+        document.getElementById('f-bank').style.display = v === 'bank' ? 'block' : 'none';
+        document.getElementById('f-crypto').style.display = v === 'crypto' ? 'block' : 'none';
+    }
+    function submitD() {
+        const amt = document.getElementById('d-amt').value;
+        if(!amt || !document.getElementById('d-utr').value) return alert("Fill all fields");
+        closeModals(); document.getElementById('msg-txt').innerText = "Deposit request for ₹"+amt+" sent.";
+        document.getElementById('overlay').style.display = 'block'; document.getElementById('modal-msg').style.display = 'block';
+    }
+    function submitW() {
+        const amt = parseFloat(document.getElementById('w-amt').value);
+        let bal = parseFloat(localStorage.getItem('bal_'+user)) || 0;
+        if(!amt || amt > bal) return alert("Insufficient Balance");
+        localStorage.setItem('bal_'+user, (bal - amt).toFixed(2));
+        updateBal(); closeModals();
+        document.getElementById('msg-txt').innerText = "Withdrawal request for ₹" + amt + " submitted.";
+        document.getElementById('overlay').style.display = 'block'; document.getElementById('modal-msg').style.display = 'block';
+    }
+    function prepBet(s) {
+        selectedS = s === 'A' ? document.getElementById('name-A').innerText : document.getElementById('name-B').innerText;
+        document.getElementById('bet-team').innerText = selectedS;
+        document.getElementById('overlay').style.display = 'block'; document.getElementById('modal-bet').style.display = 'block';
+    }
+    function addMatch() {
+        const n = document.getElementById('adm-m-name').value;
+        if(!n) return; mList.push(n); localStorage.setItem('match_list', JSON.stringify(mList));
+        document.getElementById('adm-m-name').value = ""; renderMatches(); populateSettleList();
+    }
+    function settleMatch() {
+        const tm = document.getElementById('settle-match-select').value;
+        const wi = document.getElementById('winner-name').value.trim().toLowerCase();
+        if(!wi) return alert("Enter winner");
+        for (let i = 0; i < localStorage.length; i++){
+            let key = localStorage.key(i);
+            if(key.startsWith('slips_')){
+                let slips = JSON.parse(localStorage.getItem(key));
+                let uid = key.replace('slips_', '');
+                let ub = parseFloat(localStorage.getItem('bal_' + uid)) || 0;
+                slips.forEach(s => { if(s.m === tm && s.status === 'pending'){ if(s.t.trim().toLowerCase() === wi){ s.status = 'win'; ub += parseFloat(s.w); } else { s.status = 'loss'; } } });
+                localStorage.setItem(key, JSON.stringify(slips)); localStorage.setItem('bal_'+uid, ub.toFixed(2));
+            }
+        }
+        mList = mList.filter(m => m !== tm); localStorage.setItem('match_list', JSON.stringify(mList));
+        localStorage.removeItem('liveOddsA_' + tm); localStorage.removeItem('liveOddsB_' + tm); localStorage.removeItem('lock_' + tm);
+        renderMatches(); populateSettleList(); updateBal();
+    }
+    function fundUser() {
+        const id = document.getElementById('adm-u-id').value.trim();
+        const a = parseFloat(document.getElementById('adm-u-amt').value);
+        if(!id || isNaN(a)) return alert("Invalid inputs");
+        let cur = parseFloat(localStorage.getItem('bal_'+id)) || 0;
+        localStorage.setItem('bal_'+id, (cur + a).toFixed(2)); alert("Approved ₹"+a); updateBal();
+    }
+    function resetTargetUserSlips() {
+        const tid = document.getElementById('adm-u-id').value.trim();
+        if(!tid) return alert("Enter User ID");
+        localStorage.removeItem('slips_'+tid); alert("History Reset");
+    }
+    function adminMonitorUser() {
+        const tid = document.getElementById('adm-u-id').value.trim();
+        if(!tid) return alert("Enter User ID");
+        renderSlips(tid, 'monitor-output');
+    }
+    function populateSettleList() {
+        const select = document.getElementById('settle-match-select'); select.innerHTML = "";
+        mList.forEach(m => { let opt = document.createElement('option'); opt.value = m; opt.innerText = m; select.appendChild(opt); });
+    }
+    function openWallet() { document.getElementById('overlay').style.display = 'block'; document.getElementById('modal-wallet').style.display = 'block'; }
+    function closeModals() { document.querySelectorAll('.modal-3d, #overlay').forEach(e => e.style.display = 'none'); }
+</script>
+</body>
+</html>
